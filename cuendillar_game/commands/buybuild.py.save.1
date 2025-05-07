@@ -1,0 +1,217 @@
+from evennia import Command
+from evennia import CmdSet
+
+# Determines how much XP it costs to raise a stat based on its current value
+def xp_cost_for_stat(value):
+    # Example: XP cost = current value * 5
+    return value * 5
+
+# Main +buybuild command
+class CmdBuyBuild(Command):
+    """
+    +buybuild
+
+    Start the Character Creation process by spending XP.
+    """
+
+    key = "+buybuild"
+    locks = "cmd:attr(character_setup_ready, False)"  # Only if not finished
+    help_category = "Character Generation"
+
+    def func(self):
+        caller = self.caller
+
+        # Safety check
+        if caller.db.character_setup_ready:
+            caller.msg("|rYou have already completed your character build. Contact staff for a reset.|n")
+            return
+
+        # Assign starting XP if missing
+        if not caller.db.xp:
+            caller.db.xp = 300
+
+        xp = caller.db.xp
+
+        # Display the Main Menu
+        menu = (
+            "|w=== CUENDILLAR: REFORGED - CHARACTER CREATION ===|n\n"
+            f"|cXP Available: {xp}|n\n"
+            "\n"
+            "|w[1]|n Allocate Core Stats\n"
+            "|w[2]|n Allocate One Power Attributes\n"
+            "|w[3]|n Learn Skills\n"
+            "|w[4]|n Flaws and Advantages\n"
+            "|w[5]|n Finish and Lock Character\n"
+        )
+
+        caller.msg(menu)
+        caller.msg("|y(Type a number to proceed.)|n")
+
+        # Set BuyBuild Mode
+        caller.ndb.buybuild_in_progress = True
+
+        # Attach the BuyBuildCmdSet
+        caller.cmdset.add("commands.buybuild.BuyBuildCmdSet")
+
+# Command to catch 1-5 input
+class CmdBuyBuildInput(Command):
+    """
+    Handles number input during +buybuild character creation.
+    """
+
+    key = "buybuildinput"
+    aliases = ["1", "2", "3", "4", "5"]
+    locks = "cmd:attr(buybuild_in_progress, True)"
+    help_category = "Character Generation"
+
+    def parse(self):
+        self.input = self.raw_string.strip()
+
+    def func(self):
+        caller = self.caller
+        choice = self.input
+
+        if not choice:
+            caller.msg("|rPlease type a number to choose an option.|n")
+            return
+
+        if choice == "1":
+            caller.execute_cmd("allocatestats")
+            return
+
+        elif choice == "2":
+            caller.msg("|wYou chose: Allocate One Power Attributes! (Coming soon!)|n")
+            return
+
+        elif choice == "3":
+            caller.msg("|wYou chose: Learn Skills! (Coming soon!)|n")
+            return
+
+        elif choice == "4":
+            caller.msg("|wYou chose: Flaws and Advantages! (Coming soon!)|n")
+            return
+
+        elif choice == "5":
+            caller.db.character_setup_ready = True
+            caller.ndb.buybuild_in_progress = False
+            caller.cmdset.delete("commands.buybuild.BuyBuildCmdSet")
+            caller.msg("|gCharacter build complete! You may now play.|n")
+            return
+
+        else:
+            caller.msg("|rInvalid choice. Please enter a number from the list.|n")
+            return
+
+# Allocate Core Stats
+class CmdAllocateStats(Command):
+    """
+    Allocate Core Stats during +buybuild.
+    """
+
+    key = "allocatestats"
+    locks = "cmd:attr(buybuild_in_progress, True)"
+    help_category = "Character Generation"
+
+    def func(self):
+        caller = self.caller
+
+        # Set up default values if not already set
+        if not caller.db.stats:
+            caller.db.stats = {
+                "Strength": 2,
+                "Dexterity": 2,
+                "Intelligence": 2,
+                "Charisma": 2,
+                "Wisdom": 2,
+                "Constitution": 2,
+            }
+
+        if not caller.db.xp:
+            caller.db.xp = 300
+
+        stats = caller.db.stats
+        xp = caller.db.xp
+
+        menu = (
+            "|w=== ALLOCATE CORE STATS ===|n\n"
+            f"|cXP Remaining: {xp}|n\n\n"
+            f"|w[1]|n Strength: {stats['Strength']}\n"
+            f"|w[2]|n Dexterity: {stats['Dexterity']}\n"
+            f"|w[3]|n Intelligence: {stats['Intelligence']}\n"
+            f"|w[4]|n Charisma: {stats['Charisma']}\n"
+            f"|w[5]|n Wisdom: {stats['Wisdom']}\n"
+            f"|w[6]|n Constitution: {stats['Constitution']}\n\n"
+            "|w[7]|n Finish Stat Allocation\n"
+            "|y(Type a number to raise that stat by 1 XP)|n"
+        )
+
+        caller.msg(menu)
+        caller.ndb.stat_allocation_menu = True
+
+class CmdAllocateStatsInput(Command):
+    """
+    Catch input during stat allocation.
+    """
+
+    key = "allocatestatsinput"
+    aliases = ["1", "2", "3", "4", "5", "6", "7"]
+    locks = "cmd:attr(stat_allocation_menu, True)"
+    help_category = "Character Generation"
+
+    def parse(self):
+        self.input = self.raw_string.strip()
+
+    def func(self):
+        caller = self.caller
+        stats = caller.db.stats
+        xp = caller.db.xp
+        choice = self.input
+
+        if not choice or choice not in self.aliases:
+            caller.msg("|rInvalid input. Please choose a number from the menu.|n")
+            return
+
+        if choice == "7":
+            caller.ndb.stat_allocation_menu = False
+            caller.execute_cmd("+buybuild")
+            return
+
+        if xp <= 0:
+            caller.msg("|rYou have no XP left to spend.|n")
+            return
+
+        stat_keys = {
+            "1": "Strength",
+            "2": "Dexterity",
+            "3": "Intelligence",
+            "4": "Charisma",
+            "5": "Wisdom",
+            "6": "Constitution"
+        }
+
+        stat_name = stat_keys[choice]
+        stats[stat_name] += 1
+        caller.db.xp -= 1
+        caller.db.stats = stats
+
+        caller.execute_cmd("allocatestats")
+
+# Temporary BuyBuild command set
+
+class BuyBuildCmdSet(CmdSet):
+    """
+    Active only during +buybuild.
+    """
+
+    key = "BuyBuildCmdSet"
+    priority = 110
+    duplicates = True
+
+    def at_cmdset_creation(self):
+        from commands.buybuild import CmdBuyBuildInput
+        from commands.buybuild import CmdAllocateStats
+        from commands.buybuild import CmdAllocateStatsInput
+
+        self.add(CmdBuyBuildInput())
+        self.add(CmdAllocateStats())
+        self.add(CmdAllocateStatsInput())

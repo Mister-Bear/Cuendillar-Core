@@ -1,0 +1,16 @@
+# Python bytecode
+__pycache__/
+*.py[cod]
+
+# Virtual environment
+venv/
+.env
+
+# Evennia files
+server/logs/
+server/db.sqlite3
+
+# Local history
+*.history
+
+cuendillar_game/venv310/
